@@ -1,0 +1,186 @@
+---
+title: "Pricing Test Challenge"
+author: "Mitul Shah"
+date: "8/7/2017"
+output:
+  pdf_document: default
+---
+
+```{r, warning=FALSE, message=FALSE}
+
+## Loading the required libraries
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(maps)
+library(rworldmap)
+
+```
+
+
+# Loading the data
+
+```{r}
+
+## Loading the data
+user_table <- read.csv("user_table.csv")
+test_results <- read.csv("test_results.csv")
+
+```
+
+
+# Checking Data Quality
+
+```{r, warning=FALSE, message=FALSE}
+
+## Are there any duplicate entries ?
+length(unique(user_table$user_id)) == length(user_table$user_id) ## Looks good!
+length(unique(test_results$user_id)) == length(test_results$user_id) ## Looks good!
+
+## Merge two datasets
+data = merge(test_results,user_table, by = "user_id", all.x = TRUE)
+
+## Looking at the structure
+str(data)
+
+## Looking at the summary
+summary(data)
+
+## Plotting the data on the world map
+qmplot(long, lat, data = data, size = I(.5), darken = .1, color = "red") ## Something wrong!!
+
+```
+
+There are some locations in the data which are not in USA (for instance we can see a point in Egypt, etc.), but the data only has USA in the country variable. So, something is definitely wrong for these points. But as there are hardly such points, I haven’t removed these locations from the data for the sake of convenience. 
+
+
+```{r, warning=FALSE, message=FALSE}
+
+## Check for the test and the price column (these columns indicate the same thing)
+nrow(subset(data, data$test == 1 & data$price == 39)) ## Something wrong!
+nrow(subset(data, data$test == 0 & data$price == 59)) ## Something wrong!
+
+```
+
+Thus, there is something wrong with these 365 rows. Let's remove them.
+
+```{r}
+
+## Removing the above rows
+data <- filter(data, (data$test == 1 & data$price == 59) | data$test == 0 & data$price == 39)
+
+```
+
+Now, let's see the performance of the control and the test group.
+
+# Should the company sell its software for $39 or $59?
+
+```{r}
+
+## Applying t-test to compare the performance of the control group and the test group
+t.test(data$converted[data$test == 1], data$converted[data$test == 0])
+
+```
+
+
+The results show that the test group had a conversion rate of 0.0155 while the control group had the conversion rate of 0.0199.
+
+In order to decide whether the company should sell its software for $39 or $59, we just need to compare 0.0155 * $59 and 0.0199 * $39. The first value (0.0155 * $59) is greater than the second value. Hence, the company should sell its software for $59 if the company just cares about generating higher revenue. On the other hand, if the company is a startup, it might be more interested in getting more users. In this case, it should continue to sell its software for $39. 
+
+```{r}
+
+## Changing the mode of timestamp
+data$timestamp <- as.Date(data$timestamp, format = "%Y-%m-%d")
+
+```
+
+# Main Findings from the data
+
+```{r}
+## Conversion rate by source
+data_source <- data %>% 
+  group_by(source) %>% 
+  summarise(conversion_control = mean(converted[test == 0]), conversion_test = mean(converted[test == 1])) 
+
+```
+
+
+```{r, fig.width=9, fig.height=4}
+
+## Plotting conversion rate by source for the control group
+ggplot(data = data_source, aes(x = source, y = conversion_control)) + 
+  geom_bar(stat = "identity", aes(fill = source))
+
+## Plotting conversion rate by source for the test group
+ggplot(data = data_source, aes(x = source, y = conversion_test)) + 
+  geom_bar(stat = "identity", aes(fill = source))
+
+```
+
+The friend referral has led to the maximum conversion rate. Hence, it might be helpful for the marketing team to send out emails with some sort of deals (like if you refer the product to someone and someone buys it, you get 10% discount and you can refer to as many friends as you can). This might help the company to maximize its revenue. 
+
+```{r}
+
+## Conversion rate by device
+data_device <- data %>% 
+  group_by(device) %>% 
+  summarise(conversion_control = mean(converted[test == 0]), conversion_test = mean(converted[test == 1])) 
+
+```
+
+```{r}
+
+## Plotting conversion rate by device for the control group
+ggplot(data = data_device, aes(x = device, y = conversion_control)) + 
+  geom_bar(stat = "identity", aes(fill = device))
+
+## Plotting conversion rate by device for the test group
+ggplot(data = data_device, aes(x = device, y = conversion_test)) + 
+  geom_bar(stat = "identity", aes(fill = device))
+
+```
+
+
+The type of device hasn’t affected the conversion rate too much. It seems to be an insignificant variable. Mobile users as well as web users have almost the same conversion rate. 
+
+
+```{r}
+
+## Conversion rate by operative system
+data_operative_system <- data %>% 
+  group_by(operative_system) %>% 
+  summarise(conversion_control = mean(converted[test == 0]), conversion_test = mean(converted[test == 1])) 
+
+```
+
+
+```{r}
+
+## Plotting conversion rate by operative system for the control group
+ggplot(data = data_operative_system, aes(x = operative_system, y = conversion_control)) + 
+  geom_bar(stat = "identity", aes(fill = operative_system))
+
+## Plotting conversion rate by operative system for the test group
+ggplot(data = data_operative_system, aes(x = operative_system, y = conversion_test)) + geom_bar(stat = "identity", aes(fill = operative_system))
+
+```
+
+
+The company product seems to be performing well among the Apple users (iOS and Mac has a higher conversion rate) while the linux users seem to be buying the software very less often than other users. The product team definitely need to find out why the linux users have a lower conversion rate and try to improve the product for them. 
+
+
+# Detecting Sample Size
+
+
+```{r}
+
+library(pwr)
+
+test <- power.t.test(d = 0.05, sig.level = 0.05, power = 0.8, alternative = "two.sided")
+test
+
+plot(test)
+
+```
+
